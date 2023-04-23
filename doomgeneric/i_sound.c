@@ -199,7 +199,7 @@ void I_InitSound(boolean use_sfx_prefix)
          && (snd_musicdevice == SNDDEVICE_GENMIDI
           || snd_musicdevice == SNDDEVICE_GUS))
         {
-            I_InitTimidityConfig();
+            //I_InitTimidityConfig();
         }
 
         if (!nosfx)
