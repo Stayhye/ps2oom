@@ -223,7 +223,7 @@ void I_InitGraphics (void)
 
 	screenvisible = true;
 
-    extern int I_InitInput(void);
+    extern void I_InitInput(void);
     I_InitInput();
 }
 
