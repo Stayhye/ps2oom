@@ -14,9 +14,9 @@ endif
 
 CC=soso-clang  # gcc or g++
 CFLAGS+=-O3
-LDFLAGS+=$(SOSO_ROOT)/lib/crt1.o $(SOSO_ROOT)/lib/crti.o $(SOSO_ROOT)/lib/crtn.o
+LDFLAGS+=
 CFLAGS+=-Wall -DNORMALUNIX -DLINUX -DSNDSERV -D_DEFAULT_SOURCE # -DUSEASM
-LIBS+=-lm -lc /usr/lib/llvm-10/lib/clang/10.0.0/lib/linux/libclang_rt.builtins-i386.a
+LIBS+=
 
 # subdirectory for objects
 OBJDIR=build
@@ -35,10 +35,9 @@ clean:
 
 $(OUTPUT):	$(OBJS)
 	@echo [Linking $@]
-	i386-soso-ld -v $(LDFLAGS) $(OBJS) -o $(OUTPUT) $(LIBS)
+	soso-clang -v $(LDFLAGS) $(OBJS) -o $(OUTPUT) $(LIBS)
 	@echo [Size]
 	-$(CROSS_COMPILE)size $(OUTPUT)
-	cp $(OUTPUT) ~/git/soso/userspace/bin/
 
 $(OBJS): | $(OBJDIR)
 
