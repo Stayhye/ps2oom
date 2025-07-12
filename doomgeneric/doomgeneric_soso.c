@@ -8,13 +8,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-
+#include <stdint.h>
+#include <sys/time.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
 #include <termios.h>
-
-#include <soso.h>
 
 static int FrameBufferFd = -1;
 static int* FrameBuffer = 0;
@@ -226,12 +225,17 @@ void DG_DrawFrame()
 
 void DG_SleepMs(uint32_t ms)
 {
-    sleep_ms(ms);
+    usleep(ms * 1000);
 }
 
 uint32_t DG_GetTicksMs()
 {
-    return get_uptime_ms();
+    struct timeval  tp;
+    struct timezone tzp;
+
+    gettimeofday(&tp, &tzp);
+
+    return (tp.tv_sec * 1000) + (tp.tv_usec / 1000); /* return milliseconds */
 }
 
 int DG_GetKey(int* pressed, unsigned char* doomKey)
@@ -263,7 +267,7 @@ int main(int argc, char **argv)
 {
     doomgeneric_Create(argc, argv);
 
-    for (int i = 0; ; i++)
+    while (1)
     {
         doomgeneric_Tick();
     }

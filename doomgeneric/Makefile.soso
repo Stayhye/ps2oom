@@ -12,9 +12,9 @@ else
 endif
 
 
-CC=soso-clang  # gcc or g++
+CC=musl-clang  # gcc or g++
 CFLAGS+=-O3
-LDFLAGS+=
+LDFLAGS+=-static
 CFLAGS+=-Wall -DNORMALUNIX -DLINUX -DSNDSERV -D_DEFAULT_SOURCE # -DUSEASM
 LIBS+=
 
@@ -35,7 +35,7 @@ clean:
 
 $(OUTPUT):	$(OBJS)
 	@echo [Linking $@]
-	soso-clang -v $(LDFLAGS) $(OBJS) -o $(OUTPUT) $(LIBS)
+	musl-clang -v $(LDFLAGS) $(OBJS) -o $(OUTPUT) $(LIBS)
 	@echo [Size]
 	-$(CROSS_COMPILE)size $(OUTPUT)
 
