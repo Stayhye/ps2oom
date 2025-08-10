@@ -407,6 +407,7 @@ static void checkInputDevs() {
 void DG_Init() {
 	int ret;
 	struct fb_var_screeninfo info;
+	struct fb_fix_screeninfo finfo;
 
 	//
 	// set up the framebuffer
@@ -420,14 +421,23 @@ void DG_Init() {
 	if (ret != 0)
 		I_Error("Failed to get framebuffer info: %s", strerror(errno));
 
+	// get other info (this can optionally fail, since we can guess the stride)
+	ret = ioctl(fbFd, FBIOGET_FSCREENINFO, &finfo);
+	if (ret != 0) {
+		printf("Failed to get framebuffer info: %s", strerror(errno));
+		fbStride = fbWidth * fbBytesPerPixel;
+	}
+	else {
+		fbStride = finfo.line_length;
+	}
+
 	fbWidth = info.xres;
 	fbHeight = info.yres;
 	fbBytesPerPixel = info.bits_per_pixel / 8;
-	fbStride = fbWidth * fbBytesPerPixel;
 
 	// to center the image on screen
-	fbOffsetX = (fbWidth - DOOMGENERIC_RESX) / 2;
-	fbOffsetY = (fbHeight - DOOMGENERIC_RESY) / 2;
+	fbOffsetX = ((fbWidth - DOOMGENERIC_RESX) / 2) * fbBytesPerPixel;
+	fbOffsetY = ((fbHeight - DOOMGENERIC_RESY) / 2) * fbStride;
 
 	fbPtr = mmap(NULL, fbStride * fbHeight, PROT_READ | PROT_WRITE,
 			MAP_SHARED, fbFd, 0);
@@ -456,10 +466,8 @@ void DG_DrawFrame() {
 	// larger than the doomgeneric render resolution.
 	for (int line = 0; line < DOOMGENERIC_RESY; line++) {
 		memcpy(
-			(fbPtr + (fbStride * (line + fbOffsetY)) + (fbOffsetX * fbBytesPerPixel)),
-			 fbBytesPerPixel == 4 ?
-				DG_ScreenBuffer + (DOOMGENERIC_RESX * line) :
-				DG_ScreenBuffer + (DOOMGENERIC_RESX * (line / 2)),
+			(void *)((uintptr_t)(fbPtr) + (fbStride * line) + fbOffsetY + fbOffsetX),
+				(void *)(((uintptr_t)DG_ScreenBuffer) + (DOOMGENERIC_RESX * line * fbBytesPerPixel)),
 			 (fbBytesPerPixel * DOOMGENERIC_RESX)
 		);
 	}
