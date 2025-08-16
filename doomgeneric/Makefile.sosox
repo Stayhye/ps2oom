@@ -12,11 +12,11 @@ else
 endif
 
 
-CC=soso-clang  # gcc or g++
-CFLAGS+=-O3
-LDFLAGS+=$(SOSO_ROOT)/lib/crt1.o $(SOSO_ROOT)/lib/crti.o $(SOSO_ROOT)/lib/crtn.o
-CFLAGS+=-I$(SOSO_ROOT)/include/nano-x -Wall -DNORMALUNIX -DLINUX -DSNDSERV -D_DEFAULT_SOURCE # -DUSEASM
-LIBS+=-lnano-X -lm -lc /usr/lib/llvm-10/lib/clang/10.0.0/lib/linux/libclang_rt.builtins-i386.a
+CC=/opt/musl-i386-clang-debug/bin/musl-clang-debug  # gcc or g++
+CFLAGS+=-g
+LDFLAGS+=-static
+CFLAGS+=-I../../microwindows/src/include -Wall -DNORMALUNIX -DLINUX -DSNDSERV -D_DEFAULT_SOURCE # -DUSEASM
+LIBS+=-L../../microwindows/src/lib -lnano-X
 
 # subdirectory for objects
 OBJDIR=build
@@ -35,7 +35,7 @@ clean:
 
 $(OUTPUT):	$(OBJS)
 	@echo [Linking $@]
-	i386-soso-ld -v $(LDFLAGS) $(OBJS) -o $(OUTPUT) $(LIBS)
+	/opt/musl-i386-clang-debug/bin/musl-clang-debug -v $(LDFLAGS) $(OBJS) -o $(OUTPUT) $(LIBS)
 	@echo [Size]
 	-$(CROSS_COMPILE)size $(OUTPUT)
 	cp $(OUTPUT) ~/git/soso/userspace/bin/
