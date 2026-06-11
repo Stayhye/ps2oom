@@ -17,7 +17,9 @@
 
 VB = @
 
-EE_CC = mips64r5900el-ps2-elf-gcc
+EE_CC  = mips64r5900el-ps2-elf-gcc
+EE_CXX = mips64r5900el-ps2-elf-g++
+EE_LD  = $(EE_CC)        # final link; GL_VIDEO switches this to g++ (ps2gl is C++)
 
 DG  = ../doomgeneric        # pristine upstream sources
 BIN2C = $(PS2SDK)/bin/bin2c
@@ -41,7 +43,14 @@ endif
 # GSKIT_VIDEO=1 swaps the SDL2 video backend (doomgeneric_ps2.c) for the native
 # gsKit PSMT8+CLUT one (doomgeneric_ps2_gs.c) and builds Doom with an 8-bit
 # indexed framebuffer (CMAP256) so the GS does the palette expand + upscale.
-ifdef GSKIT_VIDEO
+ifdef GL_VIDEO
+# GL_VIDEO=1 -> the ps2gl hardware (VU1+GS) backend (doomgeneric_ps2_gl.cpp),
+# 8-bit framebuffer (CMAP256). ps2gl is C++, so link with g++ + its libs.
+EE_CFLAGS += -DUSE_GL -DCMAP256
+VIDEO_OBJ  = doomgeneric_ps2_gl.o
+EE_LD      = $(EE_CXX)
+GL_LIBS    = -lps2glut -lps2gl -lps2stuff -ldma
+else ifdef GSKIT_VIDEO
 EE_CFLAGS += -DUSE_GSKIT -DCMAP256
 VIDEO_OBJ  = doomgeneric_ps2_gs.o
 else
@@ -69,7 +78,7 @@ EE_LDFLAGS = -L$(PS2SDK)/ee/lib -L$(GSKIT)/lib -L$(PS2SDK)/ports/lib \
 # libps2_drivers; SDL2 video needs gsKit/dmaKit; libdebug = GS text console;
 # libaudsrv drives the SPU2.
 EE_LIBS = -lSDL2main -lSDL2 -lps2_drivers \
-          -lgskit -ldmakit \
+          -lgskit -ldmakit $(GL_LIBS) \
           -ldebug -laudsrv \
           -lfileXio -lpatches -lpad -lkbd \
           -lm -lc -lkernel
@@ -128,7 +137,7 @@ libsd_irx.c: libsd.irx
 
 $(EE_BIN): $(EE_OBJS)
 	@echo [Linking $@]
-	$(VB)$(EE_CC) $(EE_CFLAGS) $(EE_INCS) $(EE_LDFLAGS) $(EE_OBJS) \
+	$(VB)$(EE_LD) $(EE_CFLAGS) $(EE_INCS) $(EE_LDFLAGS) $(EE_OBJS) \
 		-o $(EE_BIN) $(EE_LIBS) -Wl,-Map,$(EE_BIN).map
 
 $(EE_OBJS): | $(EE_OBJDIR)
@@ -139,3 +148,7 @@ $(EE_OBJDIR):
 $(EE_OBJDIR)/%.o: %.c
 	@echo [Compiling $<]
 	$(VB)$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+
+$(EE_OBJDIR)/%.o: %.cpp
+	@echo [Compiling $<]
+	$(VB)$(EE_CXX) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
