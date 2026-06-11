@@ -17,6 +17,9 @@ static int g_scr_active = 0;
 void BootScr_Begin(void)
 {
     init_scr();
+    // libdebug draws from the very top row, which sits in the TV's top overscan
+    // and clips the first line. Start a couple of rows down so it's readable.
+    scr_setXY(0, 2);
     g_scr_active = 1;
 }
 
