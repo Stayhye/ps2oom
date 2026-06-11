@@ -1,67 +1,58 @@
-# doomgeneric
-The purpose of doomgeneric is to make porting Doom easier.
-Of course Doom is already portable but with doomgeneric it is possible with just a few functions.
+# DOOM — PlayStation 2
 
-To try it you will need a WAD file (game data). If you don't own the game, shareware version is freely available (doom1.wad).
+A native PlayStation 2 port of DOOM: full speed, with hardware (gsKit) video,
+native SPU2 audio, and **authentic OPL/FM music** — the classic Doom soundtrack
+the way an AdLib / Sound Blaster played it.
 
-# porting
-Create a file named doomgeneric_yourplatform.c and just implement these functions to suit your platform.
-* DG_Init
-* DG_DrawFrame
-* DG_SleepMs
-* DG_GetTicksMs
-* DG_GetKey
+Specialised for the PS2, built from [doomgeneric](https://github.com/ozkl/doomgeneric)
+(and through it [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
+and id Software's original DOOM source).
 
-|Functions            |Description|
-|---------------------|-----------|
-|DG_Init              |Initialize your platfrom (create window, framebuffer, etc...).
-|DG_DrawFrame         |Frame is ready in DG_ScreenBuffer. Copy it to your platform's screen.
-|DG_SleepMs           |Sleep in milliseconds.
-|DG_GetTicksMs        |The ticks passed since launch in milliseconds.
-|DG_GetKey            |Provide keyboard events.
-|DG_SetWindowTitle    |Not required. This is for setting the window title as Doom sets this from WAD file.
+## Features
 
-### main loop
-At start, call doomgeneric_Create().
+- **Native gsKit video** — Doom's 8-bit framebuffer is uploaded as a PSMT8
+  texture + CLUT and the GS does the palette expansion and bilinear upscale in
+  hardware. Full speed at 320×200.
+- **480p progressive output** (`GS480P=1`) for component / YPbPr displays, plus
+  the standard NTSC 640×448 interlaced mode.
+- **Native audsrv audio** — sound effects mixed on the EE and streamed to the
+  SPU2 (no SDL audio).
+- **OPL / FM music (DBOPL)** — AdLib-style synthesis driven from the IWAD's
+  GENMIDI lump, mixed into the SPU2 stream.
+- **Controller input** via libpad (DualShock).
+- **Embedded or runtime WAD** — optionally bakes in the shareware DOOM1.WAD;
+  otherwise supply a WAD at runtime.
 
-In a loop, call doomgeneric_Tick().
+## Building
 
-In simplest form:
-```
-int main(int argc, char **argv)
-{
-    doomgeneric_Create(argc, argv);
+Everything builds in the official ps2dev toolchain through Docker:
 
-    while (1)
-    {
-        doomgeneric_Tick();
-    }
-    
-    return 0;
-}
+```sh
+./build.sh                                       # ps2/doomgeneric.elf (no WAD baked in)
+./build.sh EMBED_WAD=1                            # also embed shareware DOOM1.WAD
+./build.sh GSKIT_VIDEO=1 GS480P=1 EMBED_WAD=1     # native gsKit video, 480p output
 ```
 
-# sound
-Sound is much harder to implement! If you need sound, take a look at SDL port. It fully supports sound and music! Where to start? Define FEATURE_SOUND, assign DG_sound_module and DG_music_module.
+(Or `cd ps2 && make …` inside the toolchain — see [`ps2/README.md`](ps2/README.md).)
+Run the resulting ELF in PCSX2 or on real hardware.
 
-# platforms
-Ported platforms include Windows, X11, SDL, emscripten. Just look at (doomgeneric_win.c, doomgeneric_xlib.c, doomgeneric_sdl.c).
-Makefiles provided for each platform.
+## Controls
 
-## emscripten
-You can try it directly here:
-https://ozkl.github.io/doomgeneric/
+D-pad move / turn · **✕** fire · **○** use · **□** run · **L1/R1** strafe ·
+**△** Enter · **Start** menu · **Select** automap
 
-emscripten port is based on SDL port, so it supports sound and music! For music, timidity backend is used.
+## WADs & copyright
 
-## Windows
-![Windows](screenshots/windows.png)
+No game data is committed to this repository. The shareware **DOOM1.WAD** (which
+id Software permits redistributing) can be embedded for convenience; commercial
+IWADs (DOOM.WAD, DOOM2.WAD) are never included — supply your own.
 
-## X11 - Ubuntu
-![Ubuntu](screenshots/ubuntu.png)
+## Credits & licence
 
-## X11 - FreeBSD
-![FreeBSD](screenshots/freebsd.png)
+Released under the **GPLv2** (see [`LICENSE`](LICENSE)). This port stands on:
 
-## SDL
-![SDL](screenshots/sdl.png)
+- [doomgeneric](https://github.com/ozkl/doomgeneric) by ozkl
+- [Chocolate Doom](https://github.com/chocolate-doom/chocolate-doom)
+- id Software's original DOOM source
+- the **DBOPL** OPL2/OPL3 emulator (from DOSBox)
+- [ps2sdk](https://github.com/ps2dev/ps2sdk) and [gsKit](https://github.com/ps2dev/gsKit) (ps2dev)
