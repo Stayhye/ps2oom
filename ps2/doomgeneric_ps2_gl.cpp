@@ -37,9 +37,11 @@ extern "C" void BootScr_End(void);
 extern "C" void PS2Audio_Init(void);
 extern "C" void I_ResetBaseTime(void);
 extern "C" volatile int g_audio_gate;   // i_audsrvsound.c
+extern "C" void RGL_Init(void);         // r_gl.c -- one-time GL state + projection
+extern "C" void RGL_DrawWorld(void);    // r_gl.c -- M2 world geometry
 
 #ifndef BOOT_LOG_HOLD_MS
-#define BOOT_LOG_HOLD_MS 10000
+#define BOOT_LOG_HOLD_MS 3000
 #endif
 #define DISP_W 640
 #define DISP_H 448
@@ -86,9 +88,11 @@ static void EnsureGl(void)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_LIGHTING);
+    // One-time GL render state + perspective projection for the world renderer.
+    // MUST be done here, outside the per-frame pglBeginGeometry/EndGeometry
+    // block -- enabling depth test or setting the projection inside that block
+    // hangs the GS (it reselects the VU1 renderer mid-packet). See r_gl.c.
+    RGL_Init();
 
     gl_ready = 1;
     g_audio_gate = 1;   // GS now shows the game -> start audio in sync
@@ -99,80 +103,27 @@ extern "C" void DG_Init(void) { /* ps2gl is brought up lazily in EnsureGl */ }
 extern "C" void DG_DrawFrame(void)
 {
     static int first = 1;
-    int i, y;
 
     EnsureGl();
 
-    // *** Why this wait comes FIRST ***
-    // ps2gl does NOT copy texture data: glTexImage2D just stores a pointer to
-    // our gl_tex, and the upload is a DMA *Ref* to that buffer embedded in the
-    // render packet (CImageUploadPkt::Ref(pImage)). The GS reads it throughout
-    // the async render kicked by the PREVIOUS pglRenderGeometry(). If we
-    // overwrite gl_tex while that DMA is still reading it, the upload gets
-    // half-old/half-new bytes -> per-pixel speckle. pglFinishRenderingGeometry()
-    // blocks on the GS end-of-render signal, which fires only after that upload
-    // DMA has fully drained gl_tex -- so once it returns, gl_tex is safe to
-    // rewrite. (pglFinish() is NOT usable here -- it tears down the context.)
-    // The blit is trivial, so stalling the EE on the GS costs nothing.
+    // ps2gl frame protocol (the same sequence glutMainLoop runs internally):
+    // wait for the previous frame's render to finish before reusing its packet,
+    // record this frame's geometry, then flip and kick the render.
     if (!first) pglFinishRenderingGeometry(PGL_DONT_FORCE_IMMEDIATE_STOP);
     else        first = 0;
 
-    // Previous render is complete -- safe to rewrite the texture. Expand Doom's
-    // 320x200 8-bit framebuffer through the palette into the top-left of the
-    // 512-wide RGBA32 texture. GS RGBA32 word = R | G<<8 | B<<16 | A<<24
-    // (A=0x80 = opaque) -- the byte order the GS expects for a PSMCT32 texel.
-    for (y = 0; y < DOOMGENERIC_RESY; ++y)
-    {
-        const unsigned char *src = (const unsigned char *) DG_ScreenBuffer
-                                 + y * DOOMGENERIC_RESX;
-        unsigned int *dst = gl_tex + y * TEX_W;
-        for (i = 0; i < DOOMGENERIC_RESX; ++i)
-        {
-            struct color c = colors[src[i]];
-            dst[i] = (unsigned int) c.r
-                   | ((unsigned int) c.g << 8)
-                   | ((unsigned int) c.b << 16)
-                   | (0x80u << 24);
-        }
-    }
-
-    // Flush gl_tex from the CPU data cache so the upload DMA reads the bytes we
-    // just wrote, not stale cached RAM. (Necessary but, alone, not sufficient --
-    // the wait above is what actually closes the DMA-vs-CPU race.)
-    FlushCache(0);
-
-    // Point the texture object at the freshly written buffer (no upload yet --
-    // the DMA Ref is emitted when the geometry below is rendered).
-    glBindTexture(GL_TEXTURE_2D, gl_texid);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_W, TEX_H, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, gl_tex);
-
-    // Record the fullscreen textured quad (this embeds the gl_tex Ref into the
-    // render packet).
     pglBeginGeometry();
-    glClear(GL_COLOR_BUFFER_BIT);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, DISP_W, DISP_H, 0, -1, 1);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, gl_texid);
-    {
-        float u = (float) DOOMGENERIC_RESX / TEX_W;
-        float v = (float) DOOMGENERIC_RESY / TEX_H;
-        glBegin(GL_QUADS);
-        glTexCoord2f(0, 0); glVertex3f(0,            0,            0);
-        glTexCoord2f(u, 0); glVertex3f((float)DISP_W, 0,           0);
-        glTexCoord2f(u, v); glVertex3f((float)DISP_W, (float)DISP_H, 0);
-        glTexCoord2f(0, v); glVertex3f(0,            (float)DISP_H, 0);
-        glEnd();
-    }
-    glDisable(GL_TEXTURE_2D);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // M2.1: render Doom's world as GL geometry (walls only, untextured) from the
+    // viewpoint the software R_SetupFrame already computed this frame. The 8-bit
+    // software framebuffer (DG_ScreenBuffer) is ignored for now; the 2D UI gets
+    // composited back on top at M2.7. (The M1 framebuffer blit -- expand to RGBA
+    // + textured quad -- lives in git history and will return for that overlay.)
+    RGL_DrawWorld();
+
     pglEndGeometry();
 
-    // Flip and kick this frame's render (async; the upload DMA reads the
-    // gl_tex/gl_clut we just wrote). We wait for it at the top of the NEXT frame.
     pglWaitForVSync();
     pglSwapBuffers();
     pglRenderGeometry();

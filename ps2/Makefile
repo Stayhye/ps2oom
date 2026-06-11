@@ -44,10 +44,11 @@ endif
 # gsKit PSMT8+CLUT one (doomgeneric_ps2_gs.c) and builds Doom with an 8-bit
 # indexed framebuffer (CMAP256) so the GS does the palette expand + upscale.
 ifdef GL_VIDEO
-# GL_VIDEO=1 -> the ps2gl hardware (VU1+GS) backend (doomgeneric_ps2_gl.cpp),
-# 8-bit framebuffer (CMAP256). ps2gl is C++, so link with g++ + its libs.
+# GL_VIDEO=1 -> the ps2gl hardware (VU1+GS) backend (doomgeneric_ps2_gl.cpp +
+# the r_gl.c world renderer). 8-bit framebuffer (CMAP256). ps2gl is C++, so
+# link the whole ELF with g++ + its libs (r_gl.c is C, gl.h is extern "C").
 EE_CFLAGS += -DUSE_GL -DCMAP256
-VIDEO_OBJ  = doomgeneric_ps2_gl.o
+VIDEO_OBJ  = doomgeneric_ps2_gl.o r_gl.o
 EE_LD      = $(EE_CXX)
 GL_LIBS    = -lps2glut -lps2gl -lps2stuff -ldma
 else ifdef GSKIT_VIDEO
