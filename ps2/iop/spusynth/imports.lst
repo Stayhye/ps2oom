@@ -2,6 +2,12 @@ stdio_IMPORTS_start
 I_printf
 stdio_IMPORTS_end
 
+thbase_IMPORTS_start
+I_CreateThread
+I_StartThread
+I_DelayThread
+thbase_IMPORTS_end
+
 libsd_IMPORTS_start
 I_sceSdSetParam
 I_sceSdGetParam
@@ -9,4 +15,5 @@ I_sceSdSetAddr
 I_sceSdSetSwitch
 I_sceSdVoiceTrans
 I_sceSdVoiceTransStatus
+I_sceSdNote2Pitch
 libsd_IMPORTS_end
