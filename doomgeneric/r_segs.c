@@ -32,6 +32,12 @@
 #include "r_local.h"
 #include "r_sky.h"
 
+#ifdef USE_GL
+// PS2 GL backend: record a visible seg (ps2/r_gl.c) instead of software-drawing.
+// level 2 = passed Doom's occlusion clip (real visibility).
+extern void RGL_MarkSeg (seg_t* seg, int level);
+#endif
+
 
 // OPTIMIZE: closed two sided lines as single sided
 
@@ -379,9 +385,16 @@ R_StoreWallRange
     fixed_t		vtop;
     int			lightnum;
 
+#ifdef USE_GL
+    // GL backend: this seg is visible (the BSP walk + clip got us here). Record
+    // it for ps2/r_gl.c and skip all software wall drawing.
+    RGL_MarkSeg (curline, 2);
+    return;
+#endif
+
     // don't overflow and crash
     if (ds_p == &drawsegs[MAXDRAWSEGS])
-	return;		
+	return;
 		
 #ifdef RANGECHECK
     if (start >=viewwidth || start > stop)

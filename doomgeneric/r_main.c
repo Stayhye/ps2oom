@@ -864,6 +864,27 @@ void R_RenderPlayerView (player_t* player)
 {	
     R_SetupFrame (player);
 
+#ifdef USE_GL
+    // PS2 ps2gl backend: run Doom's BSP walk for VISIBILITY only -- the
+    // R_StoreWallRange hook records each visible seg (ps2/r_gl.c) and R_Subsector
+    // skips plane/sprite setup -- then skip all software pixel drawing. The GL
+    // renderer draws only the recorded segs, so its texture working set fits GS
+    // VRAM (drawing the whole map thrashed VRAM and froze; the full software
+    // render also overran the frame budget).
+    {
+        extern void RGL_BeginVis(void);
+        RGL_BeginVis ();
+        R_ClearClipSegs ();
+        R_ClearDrawSegs ();
+        R_RenderBSPNode (numnodes-1);
+    }
+    // The software 3D draw is skipped, so clear Doom's 2D framebuffer here. The
+    // status bar / HUD / menu then draw over black instead of a stale title pic
+    // (which otherwise shows through the in-game menu and the screen wipe).
+    memset (I_VideoBuffer, 0, SCREENWIDTH * SCREENHEIGHT * sizeof(*I_VideoBuffer));
+    return;
+#endif
+
     // Clear buffers.
     R_ClearClipSegs ();
     R_ClearDrawSegs ();

@@ -59,10 +59,19 @@ static wad_file_class_t *wad_file_classes[] =
     &stdc_wad_file,
 };
 
+extern wad_file_class_t cdfs_wad_file;   // disc (ISO9660) fio backend, w_file_cdfs.c
+
 wad_file_t *W_OpenFile(char *path)
 {
     wad_file_t *result;
     int i;
+
+    // Disc (ISO9660 via cdfs.irx): legacy ioman device, unreachable by fopen and
+    // needing FIO_O_RDONLY -- served by the fio backend.
+    if (path != NULL && !strncmp(path, "cdfs:", 5))
+    {
+        return cdfs_wad_file.OpenFile(path);
+    }
 
 #ifdef EMBED_WAD
     // Optional embedded shareware IWAD: serve it from memory (no filesystem).

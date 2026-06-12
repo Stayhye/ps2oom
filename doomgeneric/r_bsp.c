@@ -506,6 +506,10 @@ void R_Subsector (int num)
     count = sub->numlines;
     line = &segs[sub->firstline];
 
+#ifndef USE_GL
+    /* GL backend runs this BSP walk (from R_RenderPlayerView) for seg
+       visibility only; skip the software floor/ceiling + sprite setup, which
+       would also overflow the visplane/vissprite limits with nothing drawn. */
     if (frontsector->floorheight < viewz)
     {
 	floorplane = R_FindPlane (frontsector->floorheight,
@@ -527,8 +531,16 @@ void R_Subsector (int num)
 		
     R_AddSprites (frontsector);	
 
+#endif
+
     while (count--)
     {
+#ifdef USE_GL
+	/* DIAGNOSTIC: mark EVERY seg of every VISITED subsector, regardless of
+	   the per-seg clip, to tell "subsector not visited" from "seg reached
+	   R_AddLine but got clipped out". */
+	{ extern void RGL_MarkSeg(seg_t* seg, int level); RGL_MarkSeg (line, 1); }
+#endif
 	R_AddLine (line);
 	line++;
     }

@@ -44,13 +44,17 @@ endif
 # gsKit PSMT8+CLUT one (doomgeneric_ps2_gs.c) and builds Doom with an 8-bit
 # indexed framebuffer (CMAP256) so the GS does the palette expand + upscale.
 ifdef GL_VIDEO
-# GL_VIDEO=1 -> the ps2gl hardware (VU1+GS) backend (doomgeneric_ps2_gl.cpp +
-# the r_gl.c world renderer). 8-bit framebuffer (CMAP256). ps2gl is C++, so
-# link the whole ELF with g++ + its libs (r_gl.c is C, gl.h is extern "C").
+# GL_VIDEO=1 -> the NATIVE VU1+DMA hardware world renderer (doomgeneric_ps2_gl.cpp
+# backend + r_gl.c + the draw_3D.vsm VU1 microprogram). Renders straight to the
+# GS with a Z-buffer via PS2SDK's libdraw/libgraph/libdma/libpacket2/libmath3d
+# (no ps2gl). 8-bit framebuffer (CMAP256) feeds the BSP-visibility hooks; the
+# backend is C++ so the whole ELF links with g++. (The pre-M1 gsKit-scaled
+# software build, GSKIT_VIDEO, is a separate fork and untouched.)
 EE_CFLAGS += -DUSE_GL -DCMAP256
-VIDEO_OBJ  = doomgeneric_ps2_gl.o r_gl.o
+VIDEO_OBJ  = doomgeneric_ps2_gl.o r_gl.o r_native.o draw_3D.o
 EE_LD      = $(EE_CXX)
-GL_LIBS    = -lps2glut -lps2gl -lps2stuff -ldma
+GL_LIBS    = -ldraw -lgraph -lmath3d -lpacket2 -ldma
+EE_DVP     = $(PS2SDK)/../dvp/bin/dvp-as
 else ifdef GSKIT_VIDEO
 EE_CFLAGS += -DUSE_GSKIT -DCMAP256
 VIDEO_OBJ  = doomgeneric_ps2_gs.o
@@ -102,7 +106,7 @@ CORE_OBJS = dummy.o am_map.o doomdef.o doomstat.o dstrings.o d_event.o d_items.o
 # --- PS2-specific objects (compiled from ./) ------------------------------
 # ps2_audio_driver.o overrides libps2_drivers' init_audio_driver so we control
 # the audsrv bring-up; libsd_irx.o + audsrv_irx.o are the IRX modules it loads.
-PS2_OBJS = $(VIDEO_OBJ) w_file_ps2.o ps2_iwad.o \
+PS2_OBJS = $(VIDEO_OBJ) w_file_ps2.o w_file_cdfs.o ps2_iwad.o ps2_cdfs.o \
 	ps2_bootscr.o ps2_audio.o ps2_audio_driver.o ps2_menu.o ps2_pad.o \
 	i_audsrvsound.o audsrv_irx.o libsd_irx.o \
 	i_oplmusic.o midifile.o opl.o dbopl.o opl_queue.o opl_ps2.o
@@ -110,6 +114,14 @@ PS2_OBJS = $(VIDEO_OBJ) w_file_ps2.o ps2_iwad.o \
 # The embedded shareware WAD is only compiled in for EMBED_WAD builds.
 ifdef EMBED_WAD
 PS2_OBJS += w_file_mem.o doom1_wad.o
+endif
+
+# SPU_BEEP=1 builds the SPU2 hardware-synth S1 self-test: load spusynth.irx so
+# the IOP keys one SPU2 voice, then halt (ps2_spusynth.c + a hook in ps2_iwad.c).
+# Runs in isolation, before the audsrv stack -- just to confirm sound on hardware.
+ifdef SPU_BEEP
+EE_CFLAGS += -DSPU_BEEP
+PS2_OBJS  += ps2_spusynth.o spusynth_irx.o
 endif
 
 EE_OBJS = $(addprefix $(EE_OBJDIR)/, $(CORE_OBJS) $(PS2_OBJS))
@@ -136,6 +148,17 @@ libsd.irx:
 libsd_irx.c: libsd.irx
 	$(BIN2C) $< $@ libsd_irx
 
+# Our SPU2 synth IOP module (iop/spusynth/): build the IRX with the IOP
+# toolchain via its own make, then embed it with bin2c like the other modules.
+iop/spusynth/spusynth.irx: iop/spusynth/spusynth.c iop/spusynth/imports.lst iop/spusynth/irx_imports.h iop/spusynth/Makefile
+	$(MAKE) -C iop/spusynth
+
+spusynth.irx: iop/spusynth/spusynth.irx
+	cp $< $@
+
+spusynth_irx.c: spusynth.irx
+	$(BIN2C) $< $@ spusynth_irx
+
 $(EE_BIN): $(EE_OBJS)
 	@echo [Linking $@]
 	$(VB)$(EE_LD) $(EE_CFLAGS) $(EE_INCS) $(EE_LDFLAGS) $(EE_OBJS) \
@@ -153,3 +176,8 @@ $(EE_OBJDIR)/%.o: %.c
 $(EE_OBJDIR)/%.o: %.cpp
 	@echo [Compiling $<]
 	$(VB)$(EE_CXX) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
+
+# VU1 microprogram (draw_3D.vsm) -> object with VU1Draw3D_CodeStart/End in .vudata
+$(EE_OBJDIR)/%.o: %.vsm
+	@echo [Assembling $<]
+	$(VB)$(EE_DVP) $< -o $@

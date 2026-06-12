@@ -26,6 +26,36 @@ char *PS2_GetIWAD(void)
     int   i;
     FILE *f;
 
+#ifdef SPU_BEEP
+    // S1: prove the SPU2 hardware-voice path in isolation, before any audio
+    // stack is up, then halt so the tone is all we hear.
+    {
+        extern void PS2Spu_BeepTest(void);
+        printf("\n=== SPU2 synth S1: hardware voice self-test ===\n");
+        PS2Spu_BeepTest();
+        printf("spu: halted -- you should hear a steady tone.\n");
+        for (;;) { }
+    }
+#endif
+
+    // Disc first (ISO builds): the WAD ships on the disc as DOOM.WAD, read on
+    // demand via cdfs (the fio backend in w_file_cdfs.c; cdfs is legacy ioman, so
+    // fopen can't see it and PS2Cdfs_Exists uses fioOpen+FIO_O_RDONLY).
+    {
+        extern void PS2Cdfs_Init(void);
+        extern int  PS2Cdfs_Exists(const char *path);
+        static char cd_iwad[] = "cdfs:/DOOM.WAD";
+        int ex;
+        PS2Cdfs_Init();
+        ex = PS2Cdfs_Exists(cd_iwad);
+        printf("IWAD: %-22s %s\n", cd_iwad, ex ? "[found]" : "-");
+        if (ex)
+        {
+            printf("IWAD: using %s\n", cd_iwad);
+            return cd_iwad;
+        }
+    }
+
     // Probe hostfs, reporting each attempt so a missing/mismapped host: is
     // obvious on the boot screen.
     printf("IWAD: scanning hostfs...\n");

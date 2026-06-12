@@ -1,0 +1,11 @@
+stdio_IMPORTS_start
+I_printf
+stdio_IMPORTS_end
+
+libsd_IMPORTS_start
+I_sceSdSetParam
+I_sceSdSetAddr
+I_sceSdSetSwitch
+I_sceSdVoiceTrans
+I_sceSdVoiceTransStatus
+libsd_IMPORTS_end

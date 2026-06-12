@@ -41,7 +41,9 @@
 
 // #define OPL_MIDI_DEBUG
 
-#define MAXMIDLENGTH (96 * 1024)
+// Freedoom's MIDIs run well past the original 96 KB. The "MThd" magic (IsMid)
+// already identifies MIDI definitively, so this is just a sanity ceiling now.
+#define MAXMIDLENGTH (4 * 1024 * 1024)
 #define GENMIDI_NUM_INSTRS  128
 #define GENMIDI_NUM_PERCUSSION 47
 
