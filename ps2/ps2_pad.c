@@ -28,12 +28,18 @@
 // per frame. Kept out of SDL so the gsKit backend (no SDL event loop) works too.
 
 #include <tamtypes.h>
+#include <stdio.h>      // printf -> EE serial console (ps2_bootscr.c routes to SIO)
 #include <loadfile.h>   // SifLoadModule
 #include <libpad.h>
 
 #include "doomkeys.h"
 #include "d_event.h"    // event_t, ev_joystick, D_PostEvent
 #include "m_config.h"   // M_BindVariable (persistence)
+
+// Log controller input to the EE serial console (PCSX2 log) for debugging:
+// button press/release edges and analog direction changes (not per-frame, to
+// avoid flooding). Set to 0 to silence.
+#define PAD_LOG 1
 
 // --- live settings (bound to the config file by PS2Pad_BindConfig) ----------
 // Non-static so m_config (bind) and m_menu (the Controller page) can reach them.
@@ -204,7 +210,28 @@ void PS2Pad_Poll(void (*emit)(int pressed, unsigned char doomkey))
 
     for (i = 0; i < (int) (sizeof(g_map) / sizeof(g_map[0])); ++i)
         if (changed & g_map[i].mask)
-            emit((now & g_map[i].mask) == 0, g_map[i].key);
+        {
+            int down = (now & g_map[i].mask) == 0;
+            emit(down, g_map[i].key);
+#if PAD_LOG
+            printf("pad: btn mask=0x%04x key=%d %s\n",
+                   g_map[i].mask, g_map[i].key, down ? "down" : "up");
+#endif
+        }
+
+#if PAD_LOG
+    // Analog direction changes only (turn/forward/strafe sign), not every frame.
+    {
+        static int p_turn = 0, p_fwd = 0, p_str = 0;
+        int t = (ev.data2 > 0) - (ev.data2 < 0);
+        if (t != p_turn || fwd != p_fwd || ev.data4 != p_str)
+        {
+            printf("pad: turn=%d fwd=%d strafe=%d (run=%d sens=%d)\n",
+                   ev.data2, fwd, ev.data4, g_run, ps2_turn_sensitivity);
+            p_turn = t; p_fwd = fwd; p_str = ev.data4;
+        }
+    }
+#endif
 
     // X also confirms yes/no prompts. Those only accept key_menu_confirm
     // (default 'y'), KEY_ESCAPE, space or abort -- NOT KEY_ENTER -- so without

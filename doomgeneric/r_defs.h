@@ -431,16 +431,17 @@ typedef struct
   int			maxx;
   
   // leave pads for [minx-1]/[maxx+1]
-  
-  byte		pad1;
-  // Here lies the rub for all
-  //  dynamic resize/change of resolution.
-  byte		top[SCREENWIDTH];
-  byte		pad2;
-  byte		pad3;
-  // See above.
-  byte		bottom[SCREENWIDTH];
-  byte		pad4;
+
+  // top[]/bottom[] hold per-column screen-Y clip values with 0xffff = "no span".
+  // Widened from byte to unsigned short: a byte only reaches 255, but a hi-res
+  // (640x400) view has Y up to 399, so the values wrapped AND collided with the
+  // old 0xff sentinel -> corrupt floor/ceiling/sky spans + R_MapPlane crash.
+  unsigned short	pad1;
+  unsigned short	top[SCREENWIDTH];
+  unsigned short	pad2;
+  unsigned short	pad3;
+  unsigned short	bottom[SCREENWIDTH];
+  unsigned short	pad4;
 
 } visplane_t;
 

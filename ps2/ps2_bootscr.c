@@ -11,8 +11,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <debug.h>      // init_scr, scr_printf
+#include <sio.h>        // EE serial console (PCSX2 captures this in its log)
 
 static int g_scr_active = 0;
+static int g_sio_ready  = 0;
 
 void BootScr_Begin(void)
 {
@@ -97,21 +99,36 @@ static int want_line(const char *p, size_t n)
 // so copy the write payload out in bounded chunks.
 int _write(int fd, const void *buf, size_t nbyte)
 {
-    if ((fd == 1 || fd == 2) && g_scr_active && want_line((const char *) buf, nbyte))
+    if (fd == 1 || fd == 2)
     {
-        const char *p = (const char *) buf;
-        char tmp[120];
-        size_t i = 0;
-
-        while (i < nbyte)
+        // EE serial console: PCSX2 mirrors this to its log/console, so it's how
+        // we see engine output (and input logging) remotely. Doom's printf was
+        // previously dropped here once the boot screen closed -- now it always
+        // goes to SIO.
+        if (!g_sio_ready)
         {
-            size_t n = nbyte - i;
-            if (n > sizeof(tmp) - 1)
-                n = sizeof(tmp) - 1;
-            memcpy(tmp, p + i, n);
-            tmp[n] = '\0';
-            scr_printf("%s", tmp);
-            i += n;
+            sio_init(38400, 0, 0, 0, 0);
+            g_sio_ready = 1;
+        }
+        sio_write((void *) buf, nbyte);
+
+        // During boot, also mirror the wanted lines to the on-screen GS console.
+        if (g_scr_active && want_line((const char *) buf, nbyte))
+        {
+            const char *p = (const char *) buf;
+            char tmp[120];
+            size_t i = 0;
+
+            while (i < nbyte)
+            {
+                size_t n = nbyte - i;
+                if (n > sizeof(tmp) - 1)
+                    n = sizeof(tmp) - 1;
+                memcpy(tmp, p + i, n);
+                tmp[n] = '\0';
+                scr_printf("%s", tmp);
+                i += n;
+            }
         }
     }
 
