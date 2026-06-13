@@ -33,6 +33,12 @@
 #define SCREENHEIGHT 200
 #endif
 
+// Doom's original logical resolution. The 2D layer + a few resolution-relative
+// scales (e.g. the sky) are expressed against this and scaled up to SCREENWIDTH/
+// HEIGHT, so they stay correct at hi-res (SCREENWIDTH/HEIGHT = ORIG * factor).
+#define ORIGWIDTH  320
+#define ORIGHEIGHT 200
+
 // Screen width used for "squash" scale functions
 
 #define SCREENWIDTH_4_3 256

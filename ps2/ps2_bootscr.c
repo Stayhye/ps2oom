@@ -30,6 +30,26 @@ void BootScr_End(void)
     g_scr_active = 0;
 }
 
+// Frame-rate counter: call once per rendered frame. Prints "fps: N" to the EE
+// serial console (-> PCSX2 log) about once a second, so the framerate is
+// readable remotely. Cheap; uses the SDL millisecond timer already running.
+void PS2_FpsTick(void)
+{
+    extern unsigned int SDL_GetTicks(void);
+    static int          frames = 0;
+    static unsigned int last   = 0;
+    unsigned int        now    = SDL_GetTicks();
+
+    frames++;
+    if (last == 0) last = now;
+    if (now - last >= 1000)
+    {
+        printf("fps: %u\n", (unsigned)(frames * 1000u / (now - last)));
+        frames = 0;
+        last = now;
+    }
+}
+
 // Fatal-error screen. Doom's I_Error normally exits silently (on PS2 that just
 // looks like a reboot to the setup menu), hiding which limit/error was hit --
 // the boot console is long gone by gameplay. This re-takes the GS with the

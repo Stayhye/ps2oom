@@ -391,8 +391,11 @@ void R_DrawPlanes (void)
 	// sky flat
 	if (pl->picnum == skyflatnum)
 	{
-	    dc_iscale = pspriteiscale>>detailshift;
-	    
+	    // pspriteiscale is width-based (= FRACUNIT at fullscreen, independent of
+	    // vertical resolution), so scale the sky's vertical texture step by the
+	    // height ratio or the 128px sky tiles at hi-res. (x1 at 320x200.)
+	    dc_iscale = ((pspriteiscale>>detailshift) * ORIGHEIGHT) / SCREENHEIGHT;
+
 	    // Sky is allways drawn full bright,
 	    //  i.e. colormaps[0] is used.
 	    // Because of this hack, sky is not affected
