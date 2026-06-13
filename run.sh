@@ -74,7 +74,7 @@ LOG_WIN="$(wslpath -w "$LOG")"
 
 echo ">> booting: $TARGET"
 echo ">> log:     $LOG"
-nohup "$PCSX2" -fastboot -fullscreen -logfile "$LOG_WIN" "${BOOTARGS[@]}" >/dev/null 2>&1 &
+nohup "$PCSX2" -fastboot -logfile "$LOG_WIN" "${BOOTARGS[@]}" >/dev/null 2>&1 &
 disown
 
 echo ">> following the log (Ctrl-C to stop; PCSX2 keeps running). Filtered lines:"
