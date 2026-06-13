@@ -206,6 +206,16 @@ void PS2Pad_Poll(void (*emit)(int pressed, unsigned char doomkey))
         if (changed & g_map[i].mask)
             emit((now & g_map[i].mask) == 0, g_map[i].key);
 
+    // X also confirms yes/no prompts. Those only accept key_menu_confirm
+    // (default 'y'), KEY_ESCAPE, space or abort -- NOT KEY_ENTER -- so without
+    // this the controller can't confirm "quit to DOS", overwrite-save, etc.
+    // (the pad has no 'y' key). Emit the actual configured confirm key.
+    {
+        extern int key_menu_confirm;
+        if (changed & PAD_CROSS)
+            emit((now & PAD_CROSS) == 0, (unsigned char) key_menu_confirm);
+    }
+
     // L1 / R1: previous / next weapon (tracked locally, tapped as a number key).
     if ((changed & PAD_L1) && (now & PAD_L1) == 0)
     {
