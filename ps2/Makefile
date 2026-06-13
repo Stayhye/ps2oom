@@ -193,6 +193,12 @@ $(EE_OBJS): | $(EE_OBJDIR)
 $(EE_OBJDIR):
 	$(VB)mkdir -p $(EE_OBJDIR)
 
+# Hot software-renderer inner loops: compile at -O3 (extra unroll/scheduling).
+# The last -O on the command line wins, so this overrides EE_CFLAGS' -O2.
+# (The bottleneck at hi-res is memory bandwidth, so the win is modest.)
+$(EE_OBJDIR)/r_draw.o $(EE_OBJDIR)/r_plane.o $(EE_OBJDIR)/r_things.o \
+$(EE_OBJDIR)/r_segs.o $(EE_OBJDIR)/r_main.o $(EE_OBJDIR)/r_bsp.o: EE_CFLAGS += -O3
+
 $(EE_OBJDIR)/%.o: %.c
 	@echo [Compiling $<]
 	$(VB)$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
