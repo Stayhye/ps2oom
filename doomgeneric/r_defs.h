@@ -48,7 +48,9 @@
 #define SIL_TOP			2
 #define SIL_BOTH		3
 
-#define MAXDRAWSEGS		256
+// PS2 limit-removing: vanilla 256 overflows on detailed maps (SIGIL E5) ->
+// "R_DrawPlanes: drawsegs overflow" I_Error. ~56 B each; 2048 = ~115 KB.
+#define MAXDRAWSEGS		2048
 
 
 

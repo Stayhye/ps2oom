@@ -78,7 +78,9 @@ typedef	struct
 } cliprange_t;
 
 
-#define MAXSEGS		32
+// PS2 limit-removing: vanilla 32 solid-seg clip ranges can overflow (no bounds
+// check upstream) on wide-open maps -> corruption/crash. 8 B each; 256 trivial.
+#define MAXSEGS		256
 
 // newend is one past the last valid seg
 cliprange_t*	newend;

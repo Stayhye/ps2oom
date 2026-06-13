@@ -42,14 +42,16 @@ planefunction_t		ceilingfunc;
 //
 
 // Here comes the obnoxious "visplane".
-#define MAXVISPLANES	128
+// PS2 limit-removing: vanilla 128 overflows on detailed maps (e.g. SIGIL E5)
+// -> "R_FindPlane: no more visplanes" I_Error. ~660 B each; 1024 = ~675 KB.
+#define MAXVISPLANES	1024
 visplane_t		visplanes[MAXVISPLANES];
 visplane_t*		lastvisplane;
 visplane_t*		floorplane;
 visplane_t*		ceilingplane;
 
-// ?
-#define MAXOPENINGS	SCREENWIDTH*64
+// PS2 limit-removing: grown with MAXDRAWSEGS/MAXVISPLANES (masked-column store).
+#define MAXOPENINGS	SCREENWIDTH*256
 short			openings[MAXOPENINGS];
 short*			lastopening;
 

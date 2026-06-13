@@ -22,7 +22,9 @@
 
 
 
-#define MAXVISSPRITES  	128
+// PS2 limit-removing: vanilla 128 (extra sprites past it are silently dropped
+// -> vanishing monsters/items on busy maps). ~60 B each; 1024 = ~60 KB.
+#define MAXVISSPRITES  	1024
 
 extern vissprite_t	vissprites[MAXVISSPRITES];
 extern vissprite_t*	vissprite_p;
