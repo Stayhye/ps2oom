@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <kernel.h>            // ee threads
+#include <delaythread.h>       // DelayThread (PS2Sound_Stop pacing)
 #include <audsrv.h>
 #include <ps2_audio_driver.h>  // init_audio_driver (our ps2_audio_driver.c)
 
@@ -79,6 +80,7 @@ float libsamplerate_scale = 0.65f;
 
 static unsigned char mixer_stack[16 * 1024] __attribute__((aligned(16)));
 static int mixer_tid = -1;
+static volatile int mixer_done = 0;   // set by MixerThread just before it exits
 
 // ---- sfx loading -------------------------------------------------------
 
@@ -217,8 +219,29 @@ static int MixerThread(void *arg)
         g_mixer_chunks++;
     }
 
+    mixer_done = 1;          // signal PS2Sound_Stop() that we've left audsrv
     ExitDeleteThread();
     return 0;
+}
+
+// Quiesce the audio mixer cleanly so the SIF RPC channel is free for other
+// users (the memory card). The mixer thread runs at high priority and drives
+// audsrv over SIF continuously; doing libmc SIF I/O while it runs deadlocks
+// (the "looping stuttering audio" hang on quit). Ask the loop to exit, wait for
+// it to actually leave its audsrv call, then stop the SPU2 stream.
+void PS2Sound_Stop(void)
+{
+    int spin;
+
+    if (!sound_running)
+        return;
+
+    sound_running = 0;                 // mixer loop exits after its current chunk
+    for (spin = 0; spin < 30 && !mixer_done; ++spin)
+        DelayThread(20000);            // 20 ms; the mixer is higher-prio, runs + exits
+
+    audsrv_stop_audio();               // stop the SPU2 stream (mixer is gone)
+    g_snd_running = 0;
 }
 
 // ---- sound_module_t hooks ---------------------------------------------

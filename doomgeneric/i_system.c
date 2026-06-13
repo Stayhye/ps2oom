@@ -251,9 +251,30 @@ void I_Quit (void)
 {
     atexit_listentry_t *entry;
 
+#ifdef __PS2__
+    {
+        // PS2 "quit to DOS" = LoadExec back to our on-disc launcher, which is a
+        // full machine reset -- so we must NOT run Doom's normal exit_funcs
+        // teardown first (SDL/audio shutdown can deadlock) and must free the SIF
+        // RPC channel before any memory-card I/O. Order matters:
+        //   1. stop the audsrv mixer thread (it drives the SPU2 over SIF RPC
+        //      continuously; libmc also uses SIF RPC -> doing both at once hangs,
+        //      the "looping stuttering audio" lockup).
+        //   2. persist controller settings to the card (SIF now quiet; no-op if
+        //      no card).
+        //   3. LoadExec the launcher (resets the machine; noreturn).
+        extern void PS2Sound_Stop(void);
+        extern void PS2Mc_SaveControls(void);
+        extern void PS2_ReturnToLauncher(void);
+        PS2Sound_Stop();
+        PS2Mc_SaveControls();
+        PS2_ReturnToLauncher();   // noreturn
+    }
+#endif
+
     // Run through all exit functions
- 
-    entry = exit_funcs; 
+
+    entry = exit_funcs;
 
     while (entry != NULL)
     {
@@ -263,12 +284,8 @@ void I_Quit (void)
 
 #ifdef __PS2__
     {
-        // Persist controller settings to the memory card (no-op if no card),
-        // then return to our on-disc setup menu instead of rebooting to the PS2
-        // BIOS: re-exec the boot ELF with no game args (ps2_iwad.c).
-        extern void PS2Mc_SaveControls(void);
+        // (unreachable on PS2 -- the block above is noreturn)
         extern void PS2_ReturnToLauncher(void);
-        PS2Mc_SaveControls();
         PS2_ReturnToLauncher();   // noreturn
     }
 #endif
