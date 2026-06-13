@@ -86,7 +86,7 @@ EE_LDFLAGS = -L$(PS2SDK)/ee/lib -L$(GSKIT)/lib -L$(PS2SDK)/ports/lib \
 EE_LIBS = -lSDL2main -lSDL2 -lps2_drivers \
           -lgskit -ldmakit $(GL_LIBS) \
           -ldebug -laudsrv \
-          -lfileXio -lpatches -lpad -lkbd \
+          -lfileXio -lpatches -lpad -lmc -lkbd \
           -lm -lc -lkernel
 
 EE_OBJDIR = build
@@ -111,7 +111,7 @@ CORE_OBJS = dummy.o am_map.o doomdef.o doomstat.o dstrings.o d_event.o d_items.o
 # (PS2_MusicEngine(); see ps2_iwad.c + i_sound.c). OPL/FM = i_oplmusic + opl +
 # dbopl; SPU2 synth = i_spu2music + spusynth_irx (the embedded IOP module).
 PS2_OBJS = $(VIDEO_OBJ) w_file_ps2.o w_file_cdfs.o ps2_iwad.o ps2_cdfs.o \
-	ps2_bootscr.o ps2_audio.o ps2_audio_driver.o ps2_drivers_stub.o ps2_menu.o ps2_pad.o \
+	ps2_bootscr.o ps2_audio.o ps2_audio_driver.o ps2_drivers_stub.o ps2_menu.o ps2_pad.o ps2_mcsave.o \
 	i_audsrvsound.o audsrv_irx.o libsd_irx.o \
 	i_oplmusic.o midifile.o opl.o dbopl.o opl_queue.o opl_ps2.o \
 	i_spu2music.o spusynth_irx.o

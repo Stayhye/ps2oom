@@ -263,9 +263,12 @@ void I_Quit (void)
 
 #ifdef __PS2__
     {
-        // "Quit" returns to our on-disc setup menu instead of rebooting to the
-        // PS2 BIOS: re-exec the boot ELF with no game args (ps2_iwad.c).
+        // Persist controller settings to the memory card (no-op if no card),
+        // then return to our on-disc setup menu instead of rebooting to the PS2
+        // BIOS: re-exec the boot ELF with no game args (ps2_iwad.c).
+        extern void PS2Mc_SaveControls(void);
         extern void PS2_ReturnToLauncher(void);
+        PS2Mc_SaveControls();
         PS2_ReturnToLauncher();   // noreturn
     }
 #endif

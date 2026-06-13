@@ -1364,6 +1364,12 @@ void D_DoomMain (void)
     D_BindVariables();
     M_LoadDefaults();
 
+#ifdef __PS2__
+    // Overlay controller settings saved on the memory card (no-op if no card;
+    // see ps2/ps2_mcsave.c). Comes after M_LoadDefaults so the card wins.
+    { extern void PS2Mc_LoadControls(void); PS2Mc_LoadControls(); }
+#endif
+
     // Save configuration at exit.
     I_AtExit(M_SaveDefaults, false);
 
