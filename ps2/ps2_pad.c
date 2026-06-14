@@ -54,7 +54,7 @@ static int  g_inited  = 0;
 static int  g_analog  = 0;       // analog mode requested yet?
 static u16  g_prev    = 0xFFFF;  // button state, active-low (1 == released)
 static int  g_run     = 0;       // "run" currently held (stick or always-run)?
-static int  g_weapon  = 1;       // local weapon index for L1/R1 cycling (1..7)
+static int  g_first   = 1;       // first poll: adopt the held state, emit no edges
 
 #define RUNMAG 88                // stick deflection past this = run (when not always-run)
 
@@ -89,15 +89,15 @@ static const struct { u16 mask; unsigned char key; } g_map[] = {
     { PAD_DOWN,     KEY_DOWNARROW  },
     { PAD_LEFT,     KEY_LEFTARROW  },
     { PAD_RIGHT,    KEY_RIGHTARROW },
-    { PAD_R2,       KEY_FIRE       },
-    { PAD_SQUARE,   KEY_FIRE       },
-    { PAD_CROSS,    KEY_USE        },   // X: use (in-game) ...
+    { PAD_R2,       KEY_FIRE       },   // R2: shoot
+    { PAD_SQUARE,   KEY_USE        },   // []: open/use (alongside X)
+    { PAD_CROSS,    KEY_USE        },   // X: open/use (in-game) ...
     { PAD_CROSS,    KEY_ENTER      },   //    ... and CONFIRM (menus)
-    { PAD_L2,       KEY_RSHIFT     },   // run (hold)
-    { PAD_TRIANGLE, KEY_TAB        },   // automap
+    { PAD_L2,       KEY_RSHIFT     },   // L2: run (hold)
     { PAD_CIRCLE,   KEY_ESCAPE     },   // O: CANCEL / back / menu
     { PAD_START,    KEY_ESCAPE     },
-    { PAD_SELECT,   KEY_TAB        },
+    { PAD_SELECT,   KEY_TAB        },   // automap
+    // Triangle = jump (key_jump) -- emitted below, it's a runtime-bound key.
 };
 
 static int axis(unsigned char v)   // 0..255, centre 128 -> -1 / 0 / +1
@@ -206,6 +206,11 @@ void PS2Pad_Poll(void (*emit)(int pressed, unsigned char doomkey))
 
     // --- buttons -> keys -----------------------------------------------------
     now     = btn.btns;          // active-low: a 0 bit means that button is down
+    if (g_first)                 // adopt whatever's held at boot (e.g. the X that
+    {                            // launched the setup menu) so it isn't seen as a
+        g_prev  = now;           // fresh press -> no phantom ENTER opening the menu
+        g_first = 0;
+    }
     changed = g_prev ^ now;
 
     for (i = 0; i < (int) (sizeof(g_map) / sizeof(g_map[0])); ++i)
@@ -243,18 +248,30 @@ void PS2Pad_Poll(void (*emit)(int pressed, unsigned char doomkey))
             emit((now & PAD_CROSS) == 0, (unsigned char) key_menu_confirm);
     }
 
-    // L1 / R1: previous / next weapon (tracked locally, tapped as a number key).
-    if ((changed & PAD_L1) && (now & PAD_L1) == 0)
+    // Triangle = jump (key_jump). No effect unless jump is enabled on the setup
+    // menu (p_user.c gates it); runtime-bound key, so not in the static map.
     {
-        g_weapon = (g_weapon <= 1) ? 7 : g_weapon - 1;
-        emit(1, (unsigned char)('0' + g_weapon));
-        emit(0, (unsigned char)('0' + g_weapon));
+        extern int key_jump;
+        if (changed & PAD_TRIANGLE)
+            emit((now & PAD_TRIANGLE) == 0, (unsigned char) key_jump);
     }
-    if ((changed & PAD_R1) && (now & PAD_R1) == 0)
+
+    // L1 / R1: previous / next weapon. Drive Doom's real owned-weapon cycle
+    // (G_NextWeapon -- skips weapons you don't have, includes the SSG) via
+    // key_prevweapon/key_nextweapon, instead of blindly tapping number keys
+    // (which selected weapons you might not own and desynced).
     {
-        g_weapon = (g_weapon >= 7) ? 1 : g_weapon + 1;
-        emit(1, (unsigned char)('0' + g_weapon));
-        emit(0, (unsigned char)('0' + g_weapon));
+        extern int key_prevweapon, key_nextweapon;
+        if ((changed & PAD_L1) && (now & PAD_L1) == 0)
+        {
+            emit(1, (unsigned char) key_prevweapon);
+            emit(0, (unsigned char) key_prevweapon);
+        }
+        if ((changed & PAD_R1) && (now & PAD_R1) == 0)
+        {
+            emit(1, (unsigned char) key_nextweapon);
+            emit(0, (unsigned char) key_nextweapon);
+        }
     }
 
     g_prev = now;

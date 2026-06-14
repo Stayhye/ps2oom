@@ -149,7 +149,22 @@ void P_MovePlayer (player_t* player)
     // Do not let the player control movement
     //  if not onground.
     onground = (player->mo->z <= player->mo->floorz);
-	
+
+#ifdef __PS2__
+    // Optional jump (off = vanilla; toggled on the setup menu). On the key-down
+    // edge while standing on the floor, give an upward impulse. NOT vanilla --
+    // can sequence-break maps designed around no jumping.
+    {
+        extern int     PS2_JumpEnabled(void);
+        extern boolean ps2_jump_down;
+        static boolean was_down = false;
+        boolean want = PS2_JumpEnabled() && ps2_jump_down;
+        if (want && !was_down && onground && player->mo->momz <= 0)
+            player->mo->momz = 8*FRACUNIT;
+        was_down = want;
+    }
+#endif
+
     if (cmd->forwardmove && onground)
 	P_Thrust (player, player->mo->angle, cmd->forwardmove*2048);
     

@@ -127,8 +127,8 @@ int key_weapon5 = '5';
 int key_weapon6 = '6';
 int key_weapon7 = '7';
 int key_weapon8 = '8';
-int key_prevweapon = 0;
-int key_nextweapon = 0;
+int key_prevweapon = '[';   // bound (was 0/unbound) so the PS2 pad's L1/R1 can
+int key_nextweapon = ']';   // drive Doom's real owned-weapon cycle (G_NextWeapon)
 
 // Map control keys:
 

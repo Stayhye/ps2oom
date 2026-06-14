@@ -40,6 +40,24 @@ static int pad_wait_ready(void)
     return 0;
 }
 
+// Wait (bounded) until the confirm buttons (X / Start) are released before we
+// hand off to the game. Otherwise the press that launched it is still held when
+// the game's first pad poll runs and registers as a phantom keypress (opening
+// the menu / skipping the title). Cap so a stuck pad can't hang the launch.
+static void wait_confirm_released(void)
+{
+    struct padButtonStatus btn;
+    int tries;
+
+    for (tries = 0; tries < 500; tries++)
+    {
+        if (padRead(0, 0, &btn) != 0
+         && (btn.btns & PAD_CROSS) && (btn.btns & PAD_START))
+            return;                  // both up (active-low: 1 == released)
+        busy_wait(1000000);
+    }
+}
+
 // libdebug draws from the very top row, which sits in the TV's top overscan and
 // gets clipped -- and scr_clear resets the origin there. Start a few rows down.
 #define MENU_TOP 4
@@ -101,6 +119,8 @@ int PS2_SelectMenu(const char *title, char **items, int count)
         busy_wait(1500000);
     }
 
+    wait_confirm_released();   // don't let the launch press bleed into the game
+
     // Clear, but leave the cursor a few rows down so whatever prints next (the
     // next menu, or Doom's continuing boot log) isn't clipped in the overscan.
     scr_clear();
@@ -158,6 +178,8 @@ void PS2_SettingsMenu(const char *title, ps2_setting_t *s, int n)
 
         busy_wait(1500000);
     }
+
+    wait_confirm_released();   // don't let the launch press bleed into the game
 
     scr_clear();
     scr_setXY(0, MENU_TOP);

@@ -50,6 +50,11 @@ static int g_video_mode = 0;
 #endif
 int PS2_VideoMode(void) { return g_video_mode; }
 
+// Jump enabled (0 = vanilla, no jumping). Toggled on the setup menu; read by
+// p_user.c (P_MovePlayer). Carried across a renderer switch with -jump.
+static int g_jump = 0;
+int PS2_JumpEnabled(void) { return g_jump; }
+
 // PWAD chosen on the setup menu (or passed via -pwad on a renderer switch).
 // NULL = none. d_main.c calls PS2_GetPWAD() after loading the IWAD.
 static char *g_pwad_path = NULL;
@@ -61,7 +66,10 @@ void PS2_ReturnToLauncher(void)
 {
     char *args[1];
     args[0] = "doom";
-    LoadExecPS2(g_renderer_elf[0], 1, args);   // DOOMSDL.ELF, noreturn
+    // Re-exec THIS renderer's ELF (always on the disc) with no -iwad arg, so the
+    // setup menu shows again. (Hardcoding DOOMSDL broke quit on the gsKit-only
+    // 'gsiso' test disc, which has no DOOMSDL.ELF -> dropped to the PS2 BIOS.)
+    LoadExecPS2(g_renderer_elf[THIS_RENDERER], 1, args);   // noreturn
 }
 
 // Candidate IWADs to probe. cdfs (disc/ISO) and hostfs (host:) are scanned into
@@ -130,11 +138,13 @@ char *PS2_GetIWAD(void)
             int pm = M_CheckParmWithArgs("-music", 1);
             int pp = M_CheckParmWithArgs("-pwad", 1);
             int pv = M_CheckParmWithArgs("-video", 1);
+            int pj = M_CheckParmWithArgs("-jump", 1);
             if (pm > 0) g_music_engine = atoi(myargv[pm + 1]);
             if (pp > 0) g_pwad_path = myargv[pp + 1];
             if (pv > 0) g_video_mode = atoi(myargv[pv + 1]);
-            printf("IWAD (from launcher): %s   pwad: %s   music: %d   video: %d\n",
-                   myargv[pi + 1], g_pwad_path ? g_pwad_path : "(none)", g_music_engine, g_video_mode);
+            if (pj > 0) g_jump = atoi(myargv[pj + 1]);
+            printf("IWAD (from launcher): %s   pwad: %s   music: %d   video: %d   jump: %d\n",
+                   myargv[pi + 1], g_pwad_path ? g_pwad_path : "(none)", g_music_engine, g_video_mode, g_jump);
             return myargv[pi + 1];
         }
     }
@@ -207,7 +217,8 @@ char *PS2_GetIWAD(void)
             "NTSC 480i", "NTSC 480p", "PAL 576i", "PAL 576p",
             "720p (exp)", "1080i (exp)"
         };
-        ps2_setting_t settings[5];
+        static char  *jmp[]  = { "Off (vanilla)", "On (advanced)" };
+        ps2_setting_t settings[6];
         char         *wad;
 
         if (n == 0)
@@ -222,28 +233,32 @@ char *PS2_GetIWAD(void)
         settings[2].label = "Music";  settings[2].values = eng;       settings[2].count = 2;   settings[2].cur = g_music_engine;
         settings[3].label = "Render"; settings[3].values = rend;      settings[3].count = 3;   settings[3].cur = THIS_RENDERER;
         settings[4].label = "Video";  settings[4].values = vid;       settings[4].count = 6;   settings[4].cur = g_video_mode;
+        settings[5].label = "Jump";   settings[5].values = jmp;       settings[5].count = 2;   settings[5].cur = g_jump;
 
-        PS2_SettingsMenu("PS2OOM  --  setup", settings, 5);
+        PS2_SettingsMenu("PS2OOM  --  setup", settings, 6);
 
         wad            = paths[settings[0].cur];
         g_pwad_path    = pw_paths[settings[1].cur];   // NULL when "None"
         g_music_engine = settings[2].cur;
         g_video_mode   = settings[4].cur;
+        g_jump         = settings[5].cur;
 
         // If the user picked a DIFFERENT renderer, hand off to its ELF on the
         // disc with these settings (it reads -iwad/-pwad/-music/-video, skips
         // the menu).
         if (settings[3].cur != THIS_RENDERER)
         {
-            static char musbuf[4], vidbuf[4];
-            char *args[9];
+            static char musbuf[4], vidbuf[4], jmpbuf[4];
+            char *args[11];
             int   na;
             musbuf[0] = (char)('0' + (g_music_engine & 1)); musbuf[1] = '\0';
-            vidbuf[0] = (char)('0' + (g_video_mode  & 1)); vidbuf[1] = '\0';
+            vidbuf[0] = (char)('0' + g_video_mode);         vidbuf[1] = '\0';  // 0..5
+            jmpbuf[0] = (char)('0' + (g_jump & 1));         jmpbuf[1] = '\0';
             args[0] = "doom"; args[1] = "-iwad"; args[2] = wad;
             args[3] = "-music"; args[4] = musbuf;
             args[5] = "-video"; args[6] = vidbuf;
-            na = 7;
+            args[7] = "-jump";  args[8] = jmpbuf;
+            na = 9;
             if (g_pwad_path) { args[na++] = "-pwad"; args[na++] = g_pwad_path; }
             printf("renderer switch -> %s\n", g_renderer_elf[settings[3].cur]);
             LoadExecPS2(g_renderer_elf[settings[3].cur], na, args);   // noreturn

@@ -195,8 +195,11 @@ static const struct
 #define NUMKEYS		256 
 #define MAX_JOY_BUTTONS 20
 
-static boolean  gamekeydown[NUMKEYS]; 
-static int      turnheld;		// for accelerative turning 
+static boolean  gamekeydown[NUMKEYS];
+#ifdef __PS2__
+boolean         ps2_jump_down = false;	// jump key state, read by P_MovePlayer
+#endif
+static int      turnheld;		// for accelerative turning
  
 static boolean  mousearray[MAX_MOUSE_BUTTONS + 1];
 static boolean *mousebuttons = &mousearray[1];  // allow [-1]
@@ -331,10 +334,16 @@ void G_BuildTiccmd (ticcmd_t* cmd, int maketic)
 
     memset(cmd, 0, sizeof(ticcmd_t));
 
-    cmd->consistancy = 
-	consistancy[consoleplayer][maketic%BACKUPTICS]; 
- 
-    strafe = gamekeydown[key_strafe] || mousebuttons[mousebstrafe] 
+    cmd->consistancy =
+	consistancy[consoleplayer][maketic%BACKUPTICS];
+
+#ifdef __PS2__
+    // PS2 optional jump: surface the jump key for P_MovePlayer (vanilla ticcmd
+    // has no jump field; single-player, so a global is fine).
+    { extern boolean ps2_jump_down; ps2_jump_down = gamekeydown[key_jump]; }
+#endif
+
+    strafe = gamekeydown[key_strafe] || mousebuttons[mousebstrafe]
 	|| joybuttons[joybstrafe]; 
 
     // fraggle: support the old "joyb_speed = 31" hack which
