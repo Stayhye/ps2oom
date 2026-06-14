@@ -1,9 +1,11 @@
-# DOOM — PlayStation 2 (ps2oom)
+# PS2 Doom: Definitive Edition
+#### *(codename **ps2oom**)*
 
 A native PlayStation 2 port of DOOM: full speed, hardware video, native SPU2
 audio, dual-analog controller support, a controller-driven setup menu, **two
-selectable music engines**, **three selectable video renderers**, and
-limit-removing rendering so big PWADs (e.g. SIGIL) play.
+selectable music engines**, **three selectable video renderers** (incl. a
+**640×400 hi-res** software mode), optional **jump**, and limit-removing
+rendering so big PWADs (e.g. SIGIL) play.
 
 Specialised for the PS2, built from
 [doomgeneric](https://github.com/ozkl/doomgeneric) (and through it
@@ -13,16 +15,23 @@ id Software's original DOOM source).
 ## Features
 
 - **Setup menu at boot** (controller-driven): pick **IWAD**, **PWAD**,
-  **Music** engine, **Render** backend, and **Video** mode on one page.
+  **Music** engine, **Render** backend, **Video** mode, and **Jump** on one page.
   **✕ confirms, ○ cancels.**
 - **Three video renderers**, switchable at runtime from the menu (each is its
   own ELF on the disc; choosing one hands off to it):
-  - **SDL2** (software) — the default boot renderer.
-  - **gsKit** (software) — Doom's 8-bit framebuffer uploaded as a PSMT8 texture
-    + CLUT; the GS does the palette expand and bilinear upscale in hardware.
+  - **SDL2** (software, **320×200**) — the default boot renderer; 32-bit
+    framebuffer, so it stays at native res for full speed.
+  - **gsKit** (software, **640×400 hi-res**) — Doom's 8-bit framebuffer as a
+    PSMT8 texture + CLUT; the GS does the palette expand and upscale in hardware.
+    The 8-bit framebuffer is cheap enough to render the world at a true 2× res.
   - **GL** (experimental) — a hand-rolled VU1 + DMA hardware world renderer.
+- **640×400 hi-res** (gsKit) — true double-resolution world rendering (sky,
+  flats, sprites, HUD all scaled), plus a 640×400 title screen, while keeping
+  full speed. SDL2 stays 320×200.
 - **Six GS output modes** (gsKit renderer): NTSC 480i (default, composite-safe),
   NTSC 480p, PAL 576i, PAL 576p, 720p *(experimental)*, 1080i *(experimental)*.
+- **Optional jump** (off by default = vanilla; toggle on the setup menu) on the
+  **△** button — for maps that want it, à la (G)ZDoom.
 - **Native audsrv audio** — sound effects mixed on the EE and streamed to the
   SPU2's PCM source (no SDL audio).
 - **Two music engines**, switchable at runtime from the menu:
@@ -53,11 +62,14 @@ Controller settings round-trip through the memory card.
 
 ```mermaid
 flowchart LR
-  BOOT(["power on"]) --> MENU{"setup menu<br/>IWAD · PWAD · Music<br/>Render · Video"}
-  MC[("memory card")] -. settings .-> MENU
-  MENU --> GAME["DOOM<br/>SDL2 · gsKit · GL"]
-  GAME -- "Quit to DOS" --> MENU
-  GAME -. "save settings" .-> MC
+  BOOT(["power on"]) --> MENU{"setup menu<br/>IWAD · PWAD · Music<br/>Render · Video · Jump"}
+  MC[("memory card")] -. controller settings .-> MENU
+  MENU --> SDL["DOOM — SDL2<br/>320×200"]
+  MENU --> GS["DOOM — gsKit<br/>640×400 hi-res"]
+  MENU --> GL["DOOM — GL<br/>(experimental)"]
+  SDL -- "Quit to DOS" --> MENU
+  GS  -- "Quit to DOS" --> MENU
+  GS  -. "save settings" .-> MC
 ```
 
 ## Controls
@@ -68,12 +80,13 @@ Dual-analog, Xbox-style confirm (**✕** = the bottom face button):
 |---|---|
 | **Left stick** | move / strafe |
 | **Right stick** | turn (proportional; sensitivity is adjustable) |
-| **✕** | fire-use / **confirm** menus & prompts |
+| **R2** | fire |
+| **✕ / □** | use / open · ✕ also **confirms** menus & prompts |
 | **○** | **cancel** / open-close menu (Escape) |
-| **□ / R2** | fire |
 | **L2** | run (hold) |
-| **L1 / R1** | previous / next weapon |
-| **△ / Select** | automap |
+| **L1 / R1** | previous / next weapon (cycles owned weapons) |
+| **△** | jump *(if enabled on the setup menu)* |
+| **Select** | automap |
 | **Start** | menu |
 | **D-pad** | menu navigation (also digital move/turn) |
 
@@ -118,21 +131,25 @@ image — see the root `Dockerfile`):
 ./build.sh gl                    # experimental GL hardware world renderer
 ./build.sh spumusic              # default the menu's Music row to the SPU2 synth
 ./build.sh iso                   # build ALL three renderer ELFs + pack every WAD
-                                 #   in the WAD folder into a bootable PS2 ISO
+                                 #   into a bootable PS2 ISO (gsKit ELF = hi-res)
+./build.sh gsiso                 # FAST iteration disc: SDL2 launcher + gsKit
+                                 #   hi-res only, a few WADs (~30s vs ~5min)
 ./build.sh clean                 # remove build artifacts
 ./build.sh shell                 # interactive toolchain shell (cwd = ps2/)
 ```
 
-Raw `make` flags also work (`./build.sh GSKIT_VIDEO=1 GS480P=1 EMBED_WAD=1`).
-Note that the music engine, renderer, and video mode are now chosen **at runtime
-on the setup menu** — the build flags (`SPU_MUSIC`, `GS480P`, the renderer
+Raw `make` flags also work, e.g. `./build.sh GSKIT_VIDEO=1 GS480P=1 HIRES=1`.
+The music engine, renderer, video mode, and jump are chosen **at runtime on the
+setup menu** — the build flags (`SPU_MUSIC`, `GS480P`, `HIRES`, the renderer
 preset) only set the *defaults* a given ELF starts with.
 
-The **`iso`** target is the full experience: it builds `DOOMSDL.ELF`,
-`DOOMGS.ELF`, and `DOOMGL.ELF`, grafts them plus every WAD in the WAD folder
-into `doom.iso` (boots `DOOMSDL.ELF`), and the menu's Render row hands off
-between them. Run the ELF or ISO in PCSX2 or on real hardware. See
-[`ps2/README.md`](ps2/README.md) for the technical design.
+The **`iso`** target is the full experience: it builds `DOOMSDL.ELF` (320×200),
+`DOOMGS.ELF` (**640×400 hi-res** via `HIRES=1`), and `DOOMGL.ELF`, grafts them
+plus every WAD into `doom.iso` (boots `DOOMSDL.ELF`), and the menu's Render row
+hands off between them. To run + debug in Windows PCSX2 from WSL, use
+[`run.sh`](run.sh) (it tails the EE serial console — engine output including
+input is mirrored to the PCSX2 log). See [`ps2/README.md`](ps2/README.md) for
+the technical design.
 
 ## WADs & copyright
 

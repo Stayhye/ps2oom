@@ -16,51 +16,59 @@ limit-removing constant bumps:
   → `doomgeneric_ps2.c` (and the `_gs.c` / `_gl.cpp` renderer variants);
   `w_file.c` → `w_file_ps2.c`.
 - **`#ifdef __PS2__` hooks** in upstream core: `d_main.c` (IWAD/PWAD selection,
-  controller config bind, sound defaults), `i_sound.c` (runtime music-engine
-  pick), `i_system.c` (quit-to-launcher + on-screen `I_Error`, overridable
-  `DEFAULT_RAM`/`MIN_RAM`), `g_game.c` (proportional analog turn), `m_menu.c`
-  (in-game Controller options page), `m_config.c` (`ps2_*` controller vars),
-  `i_timer.c` (`I_ResetBaseTime`).
+  controller config bind, sound defaults, hi-res title image), `i_sound.c`
+  (runtime music-engine pick), `i_system.c` (quit-to-launcher + on-screen
+  `I_Error`, overridable `DEFAULT_RAM`/`MIN_RAM`), `g_game.c` (proportional
+  analog turn, jump key), `p_user.c` (jump impulse), `m_menu.c` (in-game
+  Controller options page), `m_config.c` (`ps2_*` controller vars), `i_timer.c`
+  (`I_ResetBaseTime`).
 - **Limit-removing** (raised vanilla constants — see below): `r_plane.c`,
   `r_defs.h`, `r_things.h`, `r_bsp.c`.
+- **Hi-res** (`HIRES=1`, see [below](#hi-resolution-gskit-640400)): resolution
+  decoupled from the 2D coordinate space — `i_video.h`, `v_video.c`, `r_plane.c`,
+  `r_main.c`, `r_draw.c`, `st_stuff.h/.c`, `st_lib.c`.
 
 ## Setup menu, renderers, and launching
 
 On boot, `ps2_iwad.c`'s `PS2_GetIWAD()` runs a one-page controller menu
 (`ps2_menu.c` `PS2_SettingsMenu`, drawn on the libdebug GS text screen) with
-five rows: **IWAD**, **PWAD**, **Music**, **Render**, **Video**. ✕ confirms,
-○ cancels (the pad maps them; see `ps2_pad.c`). This runs *before* audio starts.
+six rows: **IWAD**, **PWAD**, **Music**, **Render**, **Video**, **Jump**. ✕
+confirms, ○ cancels (the pad maps them; see `ps2_pad.c`). This runs *before*
+audio starts, and on confirm waits for the button to release so the launch
+press can't bleed into the game as a phantom keypress.
 
 There are **three renderer ELFs** on the disc, one per video backend, all built
 from the same tree with different flags:
 
 | ELF | Backend | Build flag |
 |---|---|---|
-| `DOOMSDL.ELF` | SDL2 software (`doomgeneric_ps2.c`) | *(none — default boot)* |
-| `DOOMGS.ELF` | gsKit PSMT8+CLUT (`doomgeneric_ps2_gs.c`) | `GSKIT_VIDEO=1` |
+| `DOOMSDL.ELF` | SDL2 software, **320×200** (`doomgeneric_ps2.c`) | *(none — default boot)* |
+| `DOOMGS.ELF` | gsKit PSMT8+CLUT, **640×400 hi-res** (`doomgeneric_ps2_gs.c`) | `GSKIT_VIDEO=1 HIRES=1` |
 | `DOOMGL.ELF` | VU1+DMA hardware (`doomgeneric_ps2_gl.cpp` + `r_gl.c` + `r_native.c` + `draw_3D.vsm`) | `GL_VIDEO=1` |
 
 `SYSTEM.CNF` boots `DOOMSDL.ELF`. Choosing a different **Render** row
 `LoadExecPS2`'s the matching ELF, passing the chosen settings as args
-(`-iwad/-pwad/-music/-video`) so the target skips its own menu. The selected
-**PWAD** (if any) is merged right after the IWAD via a `d_main.c` `__PS2__` hook
-(`PS2_GetPWAD()` → `D_AddFile`).
+(`-iwad/-pwad/-music/-video/-jump`) so the target skips its own menu. The
+selected **PWAD** (if any) is merged right after the IWAD via a `d_main.c`
+`__PS2__` hook (`PS2_GetPWAD()` → `D_AddFile`).
 
 The **Video** row offers six gsKit GS output modes (honored by the gsKit
 backend; SDL2/GL keep their own mode): NTSC 480i (default), NTSC 480p, PAL 576i,
 PAL 576p, 720p (CT16, experimental), 1080i (CT16 single-buffer, experimental).
-The 320×200 PSMT8 texture upscales to fill whichever mode.
+The internal framebuffer (320×200, or 640×400 on the hi-res gsKit build) is
+GS-upscaled to fill whichever mode. The **Jump** row toggles the optional jump
+(off = vanilla).
 
 ```mermaid
 flowchart TD
-  CNF["SYSTEM.CNF<br/>boots DOOMSDL.ELF"] --> MENU{"setup menu<br/>IWAD · PWAD · Music<br/>Render · Video<br/>(✕ confirm / ○ cancel)"}
+  CNF["SYSTEM.CNF<br/>boots DOOMSDL.ELF"] --> MENU{"setup menu<br/>IWAD · PWAD · Music<br/>Render · Video · Jump<br/>(✕ confirm / ○ cancel)"}
   MC[("memory card<br/>/PS2OOM.CFG")] -. "load controller<br/>settings (failsafe)" .-> MENU
   MENU -- "Render = this ELF" --> GAME["D_DoomMain<br/>(chosen renderer)"]
-  MENU -- "Render = other" --> SWITCH["LoadExecPS2<br/>DOOMGS / DOOMGL.ELF<br/>-iwad -pwad -music -video"]
+  MENU -- "Render = other" --> SWITCH["LoadExecPS2<br/>DOOMGS (hi-res) / DOOMGL.ELF<br/>-iwad -pwad -music -video -jump"]
   SWITCH --> GAME
   GAME --> PLAY["gameplay<br/>(60 fps cap; audsrv mixer thread live)"]
   PLAY -- "Options → Controller" --> PLAY
-  PLAY -- "Quit to DOS (✕)" --> QUIT["I_Quit:<br/>1 PS2Sound_Stop (free SIF)<br/>2 PS2Mc_SaveControls<br/>3 LoadExecPS2 DOOMSDL.ELF"]
+  PLAY -- "Quit to DOS (✕)" --> QUIT["I_Quit:<br/>1 PS2Sound_Stop (free SIF)<br/>2 PS2Mc_SaveControls<br/>3 LoadExecPS2 (this renderer)"]
   QUIT -. "save controller<br/>settings" .-> MC
   QUIT --> MENU
 ```
@@ -71,6 +79,13 @@ flowchart TD
 input. The **right stick is proportional** analog turn: it feeds a signed
 magnitude through `ev_joystick`, and a `g_game.c` `__PS2__` hook (`PS2_JoyTurn`)
 scales it by sensitivity (vanilla joystick turn is sign-only).
+
+Button map: **R2** fire, **✕/□** use·open (✕ also confirms menus), **○** Esc,
+**L2** run, **L1/R1** prev/next weapon (Doom's real owned-weapon cycle via
+`key_prevweapon`/`key_nextweapon` → `G_NextWeapon`), **△** jump, **Select**
+automap. **Jump** (off=vanilla) is a setup-menu toggle: `P_MovePlayer` gives an
+upward impulse on the key-down edge while on the floor; the input crosses to the
+player via the `ps2_jump_down` global (vanilla `ticcmd_t` has no jump field).
 
 Five settings live as `ps2_*` globals in `ps2_pad.c`, adjustable in-game on a
 **Controller** page added to Doom's Options menu (`m_menu.c`, text-drawn,
@@ -83,11 +98,65 @@ wedged card just times out and settings stay in RAM. Stored as a loose root file
 `/PS2OOM.CFG` (magic-tagged) so it doesn't appear as corrupted data in the BIOS
 save browser.
 
+## Hi-resolution (gsKit, 640×400)
+
+`HIRES=1` builds the gsKit ELF at a **true 640×400** internal resolution (2× of
+Doom's 320×200). It's only worth it on the **gsKit** backend: its framebuffer is
+**8-bit** (256 KB at 640×400), whereas the SDL2 backend is **32-bit** (1 MB) —
+and 640×400 software rendering is **EE-memory-bandwidth-bound** (16 KB cache vs a
+big framebuffer), so SDL2 at hi-res crawls while gsKit holds full speed. SDL2
+therefore stays 320×200; gsKit is hi-res.
+
+The trick is to **decouple the render resolution from the 2D coordinate space**.
+`SCREENWIDTH/HEIGHT` become `-D`-overridable (`i_video.h`) and are set to
+640×400; `ORIGWIDTH/ORIGHEIGHT` (320×200) stay as the logical base that all 2D
+art is authored against.
+
+```mermaid
+flowchart LR
+  V3D["3D world render<br/>(viewwidth/height based)"] -- "native 640×400" --> FB[["8-bit framebuffer<br/>640×400 (PSMT8)"]]
+  V2D["2D: menu · HUD · status bar<br/>title (logical 320×200)"] -- "V_DrawPatch / V_CopyRect<br/>scale ×2" --> FB
+  TITLE["640×400 title image<br/>(embedded, Doom palette)"] -- "blit raw" --> FB
+  FB -- "CLUT + GS upscale" --> OUT(["GS output mode<br/>(480p / 576 / 720p …)"])
+```
+
+What had to change:
+- **3D view** already scales (it's `viewwidth`/`viewheight` based) — but the
+  `setblocks*32 / *168` view-size formula and `SBARHEIGHT` were 320-hardcoded, so
+  they're scaled by the resolution (`r_main.c`, `r_draw.c`).
+- **Visplanes:** `visplane_t.top[]/bottom[]` were `byte` (0–255) with `0xff` =
+  "no span". At 400 px tall the clip-Y exceeds 255 and *collides with the
+  sentinel* → corrupt floors/ceilings/sky + an `R_MapPlane … at 255` crash.
+  Widened to `unsigned short` (sentinel `0xffff`).
+- **Sky:** the sky's vertical step used the width-based `pspriteiscale`
+  (resolution-independent), so the 128-px sky tiled at 400 px. Scaled by
+  `ORIGHEIGHT/SCREENHEIGHT` (`r_plane.c`).
+- **2D layer:** `V_DrawPatch`/`V_DrawPatchFlipped`/`V_CopyRect` now draw from the
+  logical 320×200 space scaled ×2 to the physical buffer (identity at 320×200),
+  so the menu, title, intermission and **status bar** fill the screen. The
+  status bar's coords are logical and its backing buffer is sized for the
+  physical bar (`st_stuff.*`, `st_lib.c`, `v_video.c`).
+- **Title image:** a 640×400 image remapped to Doom's palette is embedded
+  (`title_image.raw` → `bin2c`) and blitted for the title page (`D_PageDrawer`
+  `__PS2__` hook) instead of the low-res `TITLEPIC`.
+
+The 2D art is still 320×200 in the WAD, so it's necessarily chunkier than the
+natively-rendered 3D — the title image is the exception (a real 640×400 asset).
+
+## Debugging: EE serial console
+
+EE `printf` is routed to the **SIO serial console** (`ps2_bootscr.c` `_write` →
+`sio_write`), which PCSX2 mirrors to its log — so engine output is readable
+remotely (the boot console only shows on the GS screen). `ps2_pad.c` logs button
+edges + analog direction changes through it (`PAD_LOG`). `run.sh` tails it.
+
 ## Quit-to-launcher — and the SIF-RPC gotcha
 
 "Quit to DOS" returns to the setup menu instead of the PS2 BIOS: `I_Quit`'s
-`__PS2__` path `LoadExecPS2`'s `DOOMSDL.ELF` (a full machine reset), which
-re-shows the menu.
+`__PS2__` path `LoadExecPS2`'s **this renderer's own ELF** (a full machine
+reset), which re-shows the menu. (It used to hardcode `DOOMSDL.ELF`, which broke
+quit on a disc that doesn't carry it — e.g. the fast `gsiso` test disc — and
+dropped to the BIOS.)
 
 **The order matters and was a real bug.** Adding an in-game memory-card save to
 `I_Quit` hung the quit with looping/stuttering audio. Root cause: the
@@ -187,13 +256,14 @@ dynamic limit-removing — Boom/MBF map features remain unsupported.
 | File | Purpose |
 |---|---|
 | `doomgeneric_ps2.c` | SDL2 video backend + `main()` (default renderer); 60 fps cap |
-| `doomgeneric_ps2_gs.c` | gsKit PSMT8+CLUT backend + the 6 GS output modes |
+| `doomgeneric_ps2_gs.c` | gsKit PSMT8+CLUT backend + the 6 GS output modes (the hi-res ELF) |
 | `doomgeneric_ps2_gl.cpp`, `r_gl.c`, `r_native.c`, `draw_3D.vsm` | experimental VU1+DMA hardware world renderer |
-| `ps2_iwad.c` | setup menu (IWAD/PWAD/Music/Render/Video) + renderer LoadExec + `PS2_GetPWAD`/`PS2_MusicEngine`/`PS2_VideoMode`/`PS2_ReturnToLauncher` |
-| `ps2_menu.c` | controller-driven menu widgets on the GS text screen |
-| `ps2_pad.c` | controller input (libpad, analog, proportional turn) + the `ps2_*` settings globals |
+| `ps2_iwad.c` | setup menu (IWAD/PWAD/Music/Render/Video/Jump) + renderer LoadExec + `PS2_GetPWAD`/`PS2_MusicEngine`/`PS2_VideoMode`/`PS2_JumpEnabled`/`PS2_ReturnToLauncher` |
+| `ps2_menu.c` | controller-driven menu widgets on the GS text screen (+ release-wait) |
+| `ps2_pad.c` | controller input (libpad, analog, proportional turn, jump) + the `ps2_*` settings globals |
 | `ps2_mcsave.c` | **memory-card persistence** of the controller settings (failsafe, bounded libmc) |
-| `ps2_bootscr.c` | GS text console for the boot log + on-screen `I_Error` screen |
+| `ps2_bootscr.c` | GS text console for the boot log + on-screen `I_Error` screen + EE→SIO serial log + fps counter |
+| `title_image.raw` | embedded 640×400 hi-res title image (public-domain; `bin2c` → `title_image.c`) |
 | `ps2_drivers_stub.c` | **boot fix**: override `waitUntilDeviceIsReady`; stub unused USB/dev9 |
 | `ps2_audio.c` | enables loading IRX from EE buffers before audio opens |
 | `ps2_audio_driver.c` | our `init_audio_driver`: loads libsd.irx + audsrv.irx, `audsrv_init()` |
@@ -217,25 +287,30 @@ Needs the `ps2dev` toolchain (`$PS2SDK`, `$GSKIT`). Easiest via the repo's
 
 ```sh
 docker run --rm -u $(id -u):$(id -g) -v <repo>:/work -w /work/ps2 ps2dock:local \
-  make [EMBED_WAD=1] [GSKIT_VIDEO=1 [GS480P=1]] [GL_VIDEO=1] [SPU_MUSIC=1]
+  make [EMBED_WAD=1] [GSKIT_VIDEO=1 [GS480P=1]] [GL_VIDEO=1] [SPU_MUSIC=1] [HIRES=1]
 ```
 
 - `EMBED_WAD=1` bakes in `DOOM1.WAD` (must be present in `ps2/`).
 - `GSKIT_VIDEO=1` / `GL_VIDEO=1` select the gsKit / GL renderer (default = SDL2).
   Switching backend needs a `clean` first (the Makefile doesn't track CFLAGS).
+- `HIRES=1` builds the internal resolution at **640×400** and embeds the hi-res
+  title image (worthwhile on the gsKit 8-bit backend; the `iso` preset applies
+  it to the gsKit ELF only).
 - `SPU_MUSIC=1` / `GS480P=1` only set the *defaults* the menu starts on — both
-  music engines are always linked and the renderer/video/music are chosen at
-  runtime on the setup menu.
+  music engines are always linked and the renderer/video/music/jump are chosen
+  at runtime on the setup menu.
 - `audsrv.irx` / `libsd.irx` are copied from the SDK; `spusynth.irx` is built
   via `iop/spusynth/`. All three are embedded with `bin2c`.
 
-The `build.sh iso` target builds all three renderer ELFs and packs them plus
-every WAD in the WAD folder into a bootable PS2 ISO.
+`build.sh iso` builds all three renderer ELFs (SDL2 320×200, gsKit 640×400 hi-res,
+GL) + every WAD into a bootable ISO. `build.sh gsiso` is a **fast iteration**
+disc — SDL2 launcher + gsKit hi-res only, a few WADs (~30 s vs ~5 min).
 
 ## Running (PCSX2 or hardware)
 
 Boot the ISO (or run a single `doomgeneric.elf`). The boot log shows ~3 s, then
-the setup menu: pick IWAD/PWAD/Music/Render/Video and launch.
+the setup menu: pick IWAD/PWAD/Music/Render/Video/Jump and launch. From WSL,
+[`run.sh`](../run.sh) launches Windows PCSX2 and tails the EE serial log.
 
 - **WADs**: IWAD + optional PWAD found on cdfs (disc/ISO) or hostfs (`host:`),
   or the embedded shareware copy. PCSX2's host fs does not reach the IOP module
